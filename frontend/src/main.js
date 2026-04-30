@@ -1,5 +1,5 @@
 import './style.css';
-const API = 'http://localhost:8000';
+const API = 'https://railsupply-backend.onrender.com';
 
 // ─── Router ──────────────────────────────────────────────────────
 function showPage(pageId) {
