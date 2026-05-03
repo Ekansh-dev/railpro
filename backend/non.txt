@@ -1,0 +1,5 @@
+problems:
+dealers table 
+id name email pass phone number 
+admin table 
+id pass 

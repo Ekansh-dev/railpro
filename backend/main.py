@@ -13,10 +13,8 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
-
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY or SUPABASE_KEY)
 security = HTTPBearer()
 
@@ -38,10 +36,10 @@ def verify_password(password: str, hashed: str) -> bool:
     return hashlib.sha256(password.encode()).hexdigest() == hashed
 
 # ─── JWT ──────────────────────────────────────────────────────────
-def create_token(data: dict, is_admin: bool = False):
+def create_token(data: dict, role: str = "dealer"):
     payload = data.copy()
     payload["exp"] = datetime.utcnow() + timedelta(days=7)
-    payload["is_admin"] = is_admin
+    payload["role"] = role
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -52,7 +50,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 def admin_only(payload: dict = Depends(verify_token)):
-    if not payload.get("is_admin"):
+    if payload.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access only")
     return payload
 
@@ -66,9 +64,15 @@ class DealerRegister(BaseModel):
     address: str
     city: str
 
+class AdminRegister(BaseModel):
+    name: str
+    email: str
+    password: str
+
 class LoginRequest(BaseModel):
     email: str
     password: str
+    role: str  # "dealer" or "admin"
 
 # ─── Routes ───────────────────────────────────────────────────────
 @app.get("/")
@@ -91,6 +95,82 @@ def dealer_register(data: DealerRegister):
     }).execute()
     return {"message": "Dealer registered successfully"}
 
+@app.post("/admin/register")
+def admin_register(data: AdminRegister):
+    existing = supabase.table("admins").select("id").eq("email", data.email).execute()
+    if existing.data:
+        raise HTTPException(status_code=400, detail="Email already registered as admin")
+    supabase.table("admins").insert({
+        "name": data.name,
+        "email": data.email,
+        "password_hash": hash_password(data.password)
+    }).execute()
+    return {"message": "Admin registered successfully"}
+
+@app.post("/auth/login")
+def login(data: LoginRequest):
+    """
+    Unified login endpoint that handles both dealer and admin login.
+    The 'role' field determines which table to check.
+    """
+    email = data.email
+    password = data.password
+    role = data.role
+    
+    print(f"[DEBUG] Login attempt: email={email}, role={role}")
+    
+    if role not in ["dealer", "admin"]:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be 'dealer' or 'admin'")
+    
+    if role == "dealer":
+        result = supabase.table("dealers").select("*").eq("email", email).execute()
+        print(f"[DEBUG] Dealer query result: {result.data}")
+        if not result.data:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        dealer = result.data[0]
+        if not verify_password(password, dealer["password_hash"]):
+            print(f"[DEBUG] Password mismatch for dealer")
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        token = create_token(
+            {"dealer_id": dealer["id"], "email": dealer["email"], "name": dealer["name"]},
+            role="dealer"
+        )
+        return {
+            "token": token,
+            "role": "dealer",
+            "user": {
+                "name": dealer["name"],
+                "shop_name": dealer["shop_name"],
+                "email": dealer["email"]
+            }
+        }
+    else:  # admin
+        result = supabase.table("admins").select("*").eq("email", email).execute()
+        print(f"[DEBUG] Admin query result: {result.data}")
+        if not result.data:
+            print(f"[DEBUG] No admin found with email: {email}")
+            raise HTTPException(status_code=401, detail="Invalid admin credentials")
+        admin = result.data[0]
+        print(f"[DEBUG] Admin found: {admin['email']}, stored_hash={admin['password_hash'][:16]}...")
+        print(f"[DEBUG] Provided password hash: {hash_password(password)[:16]}...")
+        if not verify_password(password, admin["password_hash"]):
+            print(f"[DEBUG] Password mismatch for admin")
+            raise HTTPException(status_code=401, detail="Invalid admin credentials")
+        token = create_token(
+            {"admin_id": admin["id"], "email": admin["email"], "name": admin["name"]},
+            role="admin"
+        )
+        print(f"[DEBUG] Login successful for admin: {email}")
+        return {
+            "token": token,
+            "role": "admin",
+            "user": {
+                "name": admin["name"],
+                "email": admin["email"]
+            }
+        }
+
+# Legacy login endpoints for backward compatibility
 @app.post("/dealer/login")
 def dealer_login(data: LoginRequest):
     result = supabase.table("dealers").select("*").eq("email", data.email).execute()
@@ -99,15 +179,19 @@ def dealer_login(data: LoginRequest):
     dealer = result.data[0]
     if not verify_password(data.password, dealer["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = create_token({"dealer_id": dealer["id"], "email": dealer["email"]})
+    token = create_token({"dealer_id": dealer["id"], "email": dealer["email"]}, role="dealer")
     return {"token": token, "dealer": {"name": dealer["name"], "shop_name": dealer["shop_name"]}}
 
 @app.post("/admin/login")
 def admin_login(data: LoginRequest):
-    if data.email != ADMIN_EMAIL or data.password != ADMIN_PASSWORD:
+    result = supabase.table("admins").select("*").eq("email", data.email).execute()
+    if not result.data:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
-    token = create_token({"email": data.email}, is_admin=True)
-    return {"token": token}
+    admin = result.data[0]
+    if not verify_password(data.password, admin["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+    token = create_token({"admin_id": admin["id"], "email": admin["email"]}, role="admin")
+    return {"token": token, "admin": {"name": admin["name"], "email": admin["email"]}}
 
 @app.post("/products")
 async def upload_product(
@@ -184,3 +268,8 @@ def admin_get_products(search: str = "", category: str = "", payload: dict = Dep
 def get_categories():
     result = supabase.table("categories").select("*").execute()
     return result.data
+
+@app.delete("/admin/products/{product_id}")
+def admin_delete_product(product_id: str, payload: dict = Depends(admin_only)):
+    supabase.table("products").delete().eq("id", product_id).execute()
+    return {"message": "Product deleted by admin"}
