@@ -464,6 +464,53 @@ nav button:hover::before { transform: translateX(0); }
 .form-link a { color: var(--red); cursor: pointer; font-weight: 600; text-decoration: none; transition: opacity 0.2s; }
 .form-link a:hover { opacity: 0.8; }
 
+/* ── ROLE TABS ────────────────────────────────────────────────── */
+.role-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.role-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  color: var(--gray);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.role-tab:hover {
+  border-color: rgba(255,255,255,0.25);
+  color: var(--white);
+  background: rgba(255,255,255,0.05);
+}
+
+.role-tab.active {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(230,57,70,0.1);
+  box-shadow: 0 0 20px rgba(230,57,70,0.2);
+}
+
+.role-tab.active .role-icon {
+  transform: scale(1.2);
+}
+
+.role-icon {
+  font-size: 18px;
+  transition: transform 0.3s ease;
+}
+
 .error-msg { color: #ff6b6b; font-size: 13px; margin-top: 10px; display: none; padding: 10px 14px; background: rgba(230,57,70,0.1); border-radius: 8px; border-left: 3px solid var(--red); }
 .success-msg { color: #69db7c; font-size: 13px; margin-top: 10px; display: none; padding: 10px 14px; background: rgba(105,219,124,0.1); border-radius: 8px; border-left: 3px solid #69db7c; }
 

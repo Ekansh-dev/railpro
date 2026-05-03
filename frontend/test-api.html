@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Connection Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .info { color: #60a5fa; }
+        pre { background: #0f0f23; padding: 15px; border-radius: 8px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔧 API Connection Test</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        // Auto-detect API URL like main.js
+        const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://127.0.0.1:8000'
+            : 'https://railsupply-backend.onrender.com';
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        async function testConnection() {
+            log(`<h2>Testing API Connection</h2>`);
+            log(`<div class="info">API URL: <strong>${API}</strong></div><br>`);
+
+            // Test 1: Basic connectivity
+            try {
+                log(`📡 Testing basic connectivity...`);
+                const response = await fetch(`${API}/`);
+                const data = await response.json();
+                log(`✅ Backend is reachable: ${JSON.stringify(data)}`, 'success');
+            } catch (error) {
+                log(`❌ Cannot reach backend: ${error.message}`, 'error');
+                log(`<div class="error">Make sure backend is running on ${API}</div>`);
+                return;
+            }
+
+            // Test 2: Login
+            try {
+                log(`<br>🔐 Testing admin login...`);
+                const loginResponse = await fetch(`${API}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'a.ekansh@yahoo.com',
+                        password: 'kubera@123',
+                        role: 'admin'
+                    })
+                });
+
+                const loginData = await loginResponse.json();
+
+                if (loginResponse.ok) {
+                    log(`✅ Login successful!`, 'success');
+                    log(`<pre>${JSON.stringify(loginData, null, 2)}</pre>`);
+                    log(`<div class="success"><strong>🎉 Login works! You can now use the main app.</strong></div>`);
+                } else {
+                    log(`❌ Login failed: ${loginData.detail}`, 'error');
+                    log(`<pre>${JSON.stringify(loginData, null, 2)}</pre>`);
+                }
+            } catch (error) {
+                log(`❌ Login test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Run tests
+        testConnection();
+    </script>
+</body>
+</html>

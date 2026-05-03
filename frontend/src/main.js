@@ -1,5 +1,9 @@
 import './style.css';
-const API = 'https://railsupply-backend.onrender.com';
+
+// API Configuration - Auto-detect local vs production
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://127.0.0.1:8000'  // Local development
+  : 'https://railsupply-backend.onrender.com';  // Production
 
 // ─── Router ──────────────────────────────────────────────────────
 function showPage(pageId) {
@@ -11,7 +15,7 @@ function showPage(pageId) {
 
 function getToken() { return localStorage.getItem('token'); }
 function getUser() { return JSON.parse(localStorage.getItem('user') || 'null'); }
-function isAdmin() { return localStorage.getItem('isAdmin') === 'true'; }
+function getRole() { return localStorage.getItem('role') || 'dealer'; }
 
 function logout() {
   localStorage.clear();
@@ -23,15 +27,14 @@ function logout() {
 function renderNav() {
   const nav = document.getElementById('main-nav');
   const token = getToken();
-  const admin = isAdmin();
+  const role = getRole();
   nav.innerHTML = `
     <div class="logo">Lakshmi kubera  <span>contractor</span></div>
     <div class="nav-links">
       ${!token ? `
-        <button class="btn-outline" onclick="showPage('login')">Dealer Login</button>
+        <button class="btn-outline" onclick="showPage('login')">Login</button>
         <button class="btn-primary" onclick="showPage('register')">Register</button>
-        <button class="btn-outline" onclick="showPage('adminLogin')" style="border-color:#ffd700;color:#ffd700">Admin</button>
-      ` : admin ? `
+      ` : role === 'admin' ? `
         <button class="btn-outline" onclick="showPage('adminDashboard')">Dashboard</button>
         <button class="btn-logout" onclick="logout()">Logout</button>
       ` : `
@@ -50,20 +53,20 @@ function renderApp() {
     <div class="page active" id="home">
       <div class="hero">
         <div class="hero-badge">🚆 Trusted Railway Contractor · 15 Years Experience</div>
-<h1>Lakshmi Kubera's <span>Supply Network</span></h1>
-<p>We have been supplying to Indian Railways for over <strong>15 years</strong>. Register your shop, list your products with updated prices — when we get a railway contract, <strong>you get the order.</strong></p>
-<div class="hero-buttons">
-  <button class="btn-white" onclick="showPage('register')">📦 Register Your Shop</button>
-  <button class="btn-red" onclick="showPage('login')">🔑 Dealer Login</button>
-</div>
+        <h1>Lakshmi Kubera's <span>Supply Network</span></h1>
+        <p>We have been supplying to Indian Railways for over <strong>15 years</strong>. Register your shop, list your products with updated prices — when we get a railway contract, <strong>you get the order.</strong></p>
+        <div class="hero-buttons">
+          <button class="btn-white" onclick="showPage('register')">📦 Register Your Shop</button>
+          <button class="btn-red" onclick="showPage('login')">🔑 Login</button>
+        </div>
       </div>
       <div class="features">
         <h2>Why Us?</h2>
         <div class="features-grid">
-          <div class="feature-card"><div class="icon">🚆</div><h3>Direct Railway Orders</h3><p>We hold active contracts with Indian Railways. List your products and get bulk orders directly from us.</p></div>
-<div class="feature-card"><div class="icon">📅</div><h3>15 Years in Business</h3><p>We've been supplying to Railways since 2010. Dealers who work with us get repeat business year after year.</p></div>
-<div class="feature-card"><div class="icon">💰</div><h3>Guaranteed Payment</h3><p>No payment delays. Once we get the contract and source from you, payment is processed immediately.</p></div>
-<div class="feature-card"><div class="icon">📦</div><h3>Bulk Quantities</h3><p>Railway contracts mean large orders — chairs, cameras, coolers, medical equipment and more in bulk.</p></div>
+          <div class="feature-card"><div class="icon">🚆</div><h3>Direct Railway Orders</h3><p>We hold active contracts with Indian Railways. Dealers who work with us get bulk orders directly from us.</p></div>
+          <div class="feature-card"><div class="icon">📅</div><h3>15 Years in Business</h3><p>We've been supplying to Railways since 2010. Dealers who work with us get repeat business year after year.</p></div>
+          <div class="feature-card"><div class="icon">💰</div><h3>Guaranteed Payment</h3><p>No payment delays. Once we get the contract and source from you, payment is processed immediately.</p></div>
+          <div class="feature-card"><div class="icon">📦</div><h3>Bulk Quantities</h3><p>Railway contracts mean large orders — chairs, cameras, coolers, medical equipment and more in bulk.</p></div>
         </div>
       </div>
     </div>
@@ -91,28 +94,27 @@ function renderApp() {
       </div>
     </div>
 
-    <!-- LOGIN PAGE -->
+    <!-- LOGIN PAGE with Role Selection -->
     <div class="page" id="login">
       <div class="form-container">
-        <h2>Dealer Login</h2>
-        <p>Welcome back! Login to manage your products</p>
+        <h2>Welcome Back</h2>
+        <p>Login to access your account</p>
+        
+        <!-- Role Selection Tabs -->
+        <div class="role-tabs">
+          <button class="role-tab active" data-role="dealer" onclick="selectRole('dealer', this)">
+            <span class="role-icon">🏪</span> Dealer
+          </button>
+          <button class="role-tab" data-role="admin" onclick="selectRole('admin', this)">
+            <span class="role-icon">🔐</span> Admin
+          </button>
+        </div>
+
         <div class="form-group"><label>Email</label><input id="login-email" type="email" placeholder="email@example.com"/></div>
         <div class="form-group"><label>Password</label><input id="login-pass" type="password" placeholder="Your password"/></div>
         <div class="error-msg" id="login-error"></div>
-        <button class="form-submit" onclick="loginDealer()">Login</button>
+        <button class="form-submit" onclick="loginUser()">Login</button>
         <div class="form-link">New dealer? <a onclick="showPage('register')">Register here</a></div>
-      </div>
-    </div>
-
-    <!-- ADMIN LOGIN PAGE -->
-    <div class="page" id="adminLogin">
-      <div class="form-container">
-        <h2>🔐 Admin Login</h2>
-        <p>Restricted access — Railway Contractor only</p>
-        <div class="form-group"><label>Admin Email</label><input id="admin-email" type="email"/></div>
-        <div class="form-group"><label>Admin Password</label><input id="admin-pass" type="password"/></div>
-        <div class="error-msg" id="admin-error"></div>
-        <button class="form-submit" onclick="loginAdmin()">Login as Admin</button>
       </div>
     </div>
 
@@ -143,7 +145,6 @@ function renderApp() {
           <div class="success-msg" id="upload-success"></div>
           <button class="form-submit" style="max-width:200px" onclick="uploadProduct()">Upload Product</button>
         </div>
-
         <div class="dashboard-header">
           <h2>My Products</h2>
         </div>
@@ -174,6 +175,15 @@ function renderApp() {
   renderNav();
 }
 
+// ─── Role Selection ──────────────────────────────────────────────
+let selectedRole = 'dealer';
+
+function selectRole(role, element) {
+  selectedRole = role;
+  document.querySelectorAll('.role-tab').forEach(tab => tab.classList.remove('active'));
+  element.classList.add('active');
+}
+
 // ─── API Calls ────────────────────────────────────────────────────
 async function registerDealer() {
   const err = document.getElementById('reg-error');
@@ -200,42 +210,44 @@ async function registerDealer() {
   } catch(e) { err.textContent = 'Server error. Is backend running?'; err.style.display = 'block'; }
 }
 
-async function loginDealer() {
+async function loginUser() {
   const err = document.getElementById('login-error');
   err.style.display = 'none';
-  const body = { email: document.getElementById('login-email').value, password: document.getElementById('login-pass').value };
+  const body = {
+    email: document.getElementById('login-email').value,
+    password: document.getElementById('login-pass').value,
+    role: selectedRole
+  };
   try {
-    const res = await fetch(`${API}/dealer/login`, {
+    const res = await fetch(`${API}/auth/login`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
     });
     const data = await res.json();
     if (!res.ok) { err.textContent = data.detail; err.style.display = 'block'; return; }
     localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.dealer));
-    localStorage.setItem('isAdmin', 'false');
+    localStorage.setItem('role', data.role);
+    localStorage.setItem('user', JSON.stringify(data.user));
     renderApp();
-    showPage('dealerDashboard');
-    document.getElementById('dealer-name').textContent = data.dealer.name;
-    loadMyProducts();
+    if (data.role === 'admin') {
+      showPage('adminDashboard');
+      searchProducts();
+    } else {
+      showPage('dealerDashboard');
+      document.getElementById('dealer-name').textContent = data.user.name;
+      loadMyProducts();
+    }
   } catch(e) { err.textContent = 'Server error. Is backend running?'; err.style.display = 'block'; }
 }
 
+// Legacy login functions for backward compatibility
+async function loginDealer() {
+  selectedRole = 'dealer';
+  loginUser();
+}
+
 async function loginAdmin() {
-  const err = document.getElementById('admin-error');
-  err.style.display = 'none';
-  const body = { email: document.getElementById('admin-email').value, password: document.getElementById('admin-pass').value };
-  try {
-    const res = await fetch(`${API}/admin/login`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (!res.ok) { err.textContent = data.detail; err.style.display = 'block'; return; }
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('isAdmin', 'true');
-    renderApp();
-    showPage('adminDashboard');
-    searchProducts();
-  } catch(e) { err.textContent = 'Server error. Is backend running?'; err.style.display = 'block'; }
+  selectedRole = 'admin';
+  loginUser();
 }
 
 async function uploadProduct() {
@@ -302,6 +314,19 @@ async function deleteProduct(id) {
   loadMyProducts();
 }
 
+async function adminDeleteProduct(id) {
+  if (!confirm('Delete this product? This cannot be undone.')) return;
+  try {
+    const res = await fetch(`${API}/admin/products/${id}`, {
+      method: 'DELETE',
+      headers: {'Authorization': `Bearer ${getToken()}`}
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail); return; }
+    searchProducts();
+  } catch(e) { alert('Server error. Try again.'); }
+}
+
 // ─── Product Card ─────────────────────────────────────────────────
 function productCard(p, isDealer) {
   const updatedAt = new Date(p.updated_at);
@@ -325,7 +350,10 @@ function productCard(p, isDealer) {
           </div>
         ` : ''}
         <div class="updated-badge">🕒 Updated ${daysSince === 0 ? 'today' : daysSince + ' days ago'}</div>
-        ${isDealer ? `<div class="card-actions"><button class="btn-delete" onclick="deleteProduct('${p.id}')">🗑 Delete</button></div>` : ''}
+        ${isDealer
+          ? `<div class="card-actions"><button class="btn-delete" onclick="deleteProduct('${p.id}')">🗑 Delete</button></div>`
+          : `<div class="card-actions"><button class="btn-delete" onclick="adminDeleteProduct('${p.id}')">🗑 Remove Product</button></div>`
+        }
       </div>
     </div>`;
 }
@@ -333,9 +361,9 @@ function productCard(p, isDealer) {
 // ─── Init ─────────────────────────────────────────────────────────
 renderApp();
 
-// Auto-redirect if already logged in
 if (getToken()) {
-  if (isAdmin()) {
+  const role = getRole();
+  if (role === 'admin') {
     showPage('adminDashboard');
     setTimeout(searchProducts, 100);
   } else {
@@ -353,7 +381,10 @@ window.showPage = showPage;
 window.registerDealer = registerDealer;
 window.loginDealer = loginDealer;
 window.loginAdmin = loginAdmin;
+window.loginUser = loginUser;
+window.selectRole = selectRole;
 window.uploadProduct = uploadProduct;
 window.deleteProduct = deleteProduct;
+window.adminDeleteProduct = adminDeleteProduct;
 window.searchProducts = searchProducts;
 window.logout = logout;
