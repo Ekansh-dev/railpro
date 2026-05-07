@@ -81,13 +81,14 @@ def root():
 
 @app.post("/dealer/register")
 def dealer_register(data: DealerRegister):
-    existing = supabase.table("dealers").select("id").eq("email", data.email).execute()
+    email = data.email.strip().lower()  # Normalize email to lowercase
+    existing = supabase.table("dealers").select("id").eq("email", email).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered")
     supabase.table("dealers").insert({
         "name": data.name,
         "shop_name": data.shop_name,
-        "email": data.email,
+        "email": email,
         "password_hash": hash_password(data.password),
         "phone": data.phone,
         "address": data.address,
@@ -97,12 +98,13 @@ def dealer_register(data: DealerRegister):
 
 @app.post("/admin/register")
 def admin_register(data: AdminRegister):
-    existing = supabase.table("admins").select("id").eq("email", data.email).execute()
+    email = data.email.strip().lower()  # Normalize email to lowercase
+    existing = supabase.table("admins").select("id").eq("email", email).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Email already registered as admin")
     supabase.table("admins").insert({
         "name": data.name,
-        "email": data.email,
+        "email": email,
         "password_hash": hash_password(data.password)
     }).execute()
     return {"message": "Admin registered successfully"}
@@ -113,28 +115,34 @@ def login(data: LoginRequest):
     Unified login endpoint that handles both dealer and admin login.
     The 'role' field determines which table to check.
     """
-    email = data.email
+    email = data.email.strip().lower()  # Normalize email
     password = data.password
     role = data.role
     
-    print(f"[DEBUG] Login attempt: email={email}, role={role}")
+    print(f"[LOGIN] Attempt: email={email}, role={role}")
     
     if role not in ["dealer", "admin"]:
         raise HTTPException(status_code=400, detail="Invalid role. Must be 'dealer' or 'admin'")
     
     if role == "dealer":
         result = supabase.table("dealers").select("*").eq("email", email).execute()
-        print(f"[DEBUG] Dealer query result: {result.data}")
+        print(f"[LOGIN] Dealer query returned {len(result.data)} result(s)")
         if not result.data:
+            print(f"[LOGIN] FAILED: No dealer found with email={email}")
             raise HTTPException(status_code=401, detail="Invalid email or password")
         dealer = result.data[0]
-        if not verify_password(password, dealer["password_hash"]):
-            print(f"[DEBUG] Password mismatch for dealer")
+        stored_hash = dealer["password_hash"]
+        provided_hash = hash_password(password)
+        print(f"[LOGIN] Stored hash: {stored_hash[:16]}... (len={len(stored_hash)})")
+        print(f"[LOGIN] Provided hash: {provided_hash[:16]}... (len={len(provided_hash)})")
+        if not verify_password(password, stored_hash):
+            print(f"[LOGIN] FAILED: Password mismatch for dealer={email}")
             raise HTTPException(status_code=401, detail="Invalid email or password")
         token = create_token(
             {"dealer_id": dealer["id"], "email": dealer["email"], "name": dealer["name"]},
             role="dealer"
         )
+        print(f"[LOGIN] SUCCESS: Dealer login for {email}")
         return {
             "token": token,
             "role": "dealer",
@@ -146,21 +154,23 @@ def login(data: LoginRequest):
         }
     else:  # admin
         result = supabase.table("admins").select("*").eq("email", email).execute()
-        print(f"[DEBUG] Admin query result: {result.data}")
+        print(f"[LOGIN] Admin query returned {len(result.data)} result(s)")
         if not result.data:
-            print(f"[DEBUG] No admin found with email: {email}")
+            print(f"[LOGIN] FAILED: No admin found with email={email}")
             raise HTTPException(status_code=401, detail="Invalid admin credentials")
         admin = result.data[0]
-        print(f"[DEBUG] Admin found: {admin['email']}, stored_hash={admin['password_hash'][:16]}...")
-        print(f"[DEBUG] Provided password hash: {hash_password(password)[:16]}...")
-        if not verify_password(password, admin["password_hash"]):
-            print(f"[DEBUG] Password mismatch for admin")
+        stored_hash = admin["password_hash"]
+        provided_hash = hash_password(password)
+        print(f"[LOGIN] Stored hash: {stored_hash[:16]}... (len={len(stored_hash)})")
+        print(f"[LOGIN] Provided hash: {provided_hash[:16]}... (len={len(provided_hash)})")
+        if not verify_password(password, stored_hash):
+            print(f"[LOGIN] FAILED: Password mismatch for admin={email}")
             raise HTTPException(status_code=401, detail="Invalid admin credentials")
         token = create_token(
             {"admin_id": admin["id"], "email": admin["email"], "name": admin["name"]},
             role="admin"
         )
-        print(f"[DEBUG] Login successful for admin: {email}")
+        print(f"[LOGIN] SUCCESS: Admin login for {email}")
         return {
             "token": token,
             "role": "admin",

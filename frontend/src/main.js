@@ -213,20 +213,51 @@ async function registerDealer() {
 async function loginUser() {
   const err = document.getElementById('login-error');
   err.style.display = 'none';
+  
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-pass').value;
+  
+  // Validate input
+  if (!email || !password) {
+    err.textContent = 'Please enter both email and password';
+    err.style.display = 'block';
+    return;
+  }
+  
   const body = {
-    email: document.getElementById('login-email').value,
-    password: document.getElementById('login-pass').value,
+    email: email,
+    password: password,
     role: selectedRole
   };
+  
+  console.log(`[LOGIN] Attempting login for ${email} as ${selectedRole}`);
+  
   try {
     const res = await fetch(`${API}/auth/login`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
     });
+    
+    console.log(`[LOGIN] Response status: ${res.status}`);
+    
     const data = await res.json();
-    if (!res.ok) { err.textContent = data.detail; err.style.display = 'block'; return; }
+    
+    if (!res.ok) {
+      console.error(`[LOGIN] Login failed: ${data.detail}`);
+      err.textContent = data.detail || 'Invalid credentials. Please check your email and password.';
+      err.style.display = 'block';
+      return;
+    }
+    
+    console.log(`[LOGIN] Login successful for ${email}`);
+    
+    // Clear any old data first
+    localStorage.clear();
+    
+    // Store new session data
     localStorage.setItem('token', data.token);
     localStorage.setItem('role', data.role);
     localStorage.setItem('user', JSON.stringify(data.user));
+    
     renderApp();
     if (data.role === 'admin') {
       showPage('adminDashboard');
@@ -236,7 +267,11 @@ async function loginUser() {
       document.getElementById('dealer-name').textContent = data.user.name;
       loadMyProducts();
     }
-  } catch(e) { err.textContent = 'Server error. Is backend running?'; err.style.display = 'block'; }
+  } catch(e) {
+    console.error(`[LOGIN] Error: ${e.message}`);
+    err.textContent = 'Connection error. Please check your internet connection and try again.';
+    err.style.display = 'block';
+  }
 }
 
 // Legacy login functions for backward compatibility
