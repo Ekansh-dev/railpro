@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from supabase import create_client, Client
@@ -31,6 +32,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ─── Global error handler: ensures CORS headers are on ALL responses ───────────
+CORS_ORIGIN = "https://railpro-wine.vercel.app"
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": CORS_ORIGIN,
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": CORS_ORIGIN,
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
 
 # ─── Password Hashing ─────────────────────────────────────────────
 def hash_password(password: str) -> str:
