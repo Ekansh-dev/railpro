@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from jose import jwt, JWTError
 import hashlib, os, uuid
 
@@ -22,7 +22,11 @@ app = FastAPI(title="RailSupply API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://railpro-wine.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,7 +42,7 @@ def verify_password(password: str, hashed: str) -> bool:
 # ─── JWT ──────────────────────────────────────────────────────────
 def create_token(data: dict, role: str = "dealer"):
     payload = data.copy()
-    payload["exp"] = datetime.utcnow() + timedelta(days=7)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(days=7)
     payload["role"] = role
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
@@ -72,7 +76,7 @@ class AdminRegister(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
-    role: str  # "dealer" or "admin"
+    role: str = "dealer"  # "dealer" or "admin"
 
 # ─── Routes ───────────────────────────────────────────────────────
 @app.get("/")
@@ -229,13 +233,15 @@ async def upload_product(
         "description": description,
         "price": price,
         "image_url": image_url,
-        "updated_at": datetime.utcnow().isoformat()
+        "updated_at": datetime.now(timezone.utc).isoformat()
     }).execute()
     return {"message": "Product uploaded successfully"}
 
 @app.get("/products/mine")
 def my_products(payload: dict = Depends(verify_token)):
     dealer_id = payload.get("dealer_id")
+    if not dealer_id:
+        raise HTTPException(status_code=403, detail="Dealers only")
     result = supabase.table("products").select("*").eq("dealer_id", dealer_id).execute()
     return result.data
 
@@ -249,18 +255,22 @@ def update_product(
     payload: dict = Depends(verify_token)
 ):
     dealer_id = payload.get("dealer_id")
+    if not dealer_id:
+        raise HTTPException(status_code=403, detail="Dealers only")
     supabase.table("products").update({
         "name": name,
         "category": category,
         "description": description,
         "price": price,
-        "updated_at": datetime.utcnow().isoformat()
+        "updated_at": datetime.now(timezone.utc).isoformat()
     }).eq("id", product_id).eq("dealer_id", dealer_id).execute()
     return {"message": "Product updated"}
 
 @app.delete("/products/{product_id}")
 def delete_product(product_id: str, payload: dict = Depends(verify_token)):
     dealer_id = payload.get("dealer_id")
+    if not dealer_id:
+        raise HTTPException(status_code=403, detail="Dealers only")
     supabase.table("products").delete().eq("id", product_id).eq("dealer_id", dealer_id).execute()
     return {"message": "Product deleted"}
 
