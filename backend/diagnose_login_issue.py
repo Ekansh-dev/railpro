@@ -11,7 +11,7 @@ This script will:
 import hashlib
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from supabase import create_client, Client
 from dotenv import load_dotenv
 
@@ -77,7 +77,7 @@ try:
         
         # Show recent registrations (last 7 days)
         print("\n📅 RECENT REGISTRATIONS (Last 7 days):")
-        seven_days_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+        seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         recent = [d for d in result.data if d.get('created_at', '') > seven_days_ago]
         
         if recent:

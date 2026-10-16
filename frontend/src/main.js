@@ -184,26 +184,37 @@ function selectRole(role, element) {
   element.classList.add('active');
 }
 
+// Helper to format API error details (handles array or string details from FastAPI)
+function formatDetail(detail, fallback = 'An error occurred') {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map(d => d.msg || d.detail || JSON.stringify(d)).join(', ');
+  }
+  if (typeof detail === 'object') return JSON.stringify(detail);
+  return String(detail);
+}
+
 // ─── API Calls ────────────────────────────────────────────────────
 async function registerDealer() {
   const err = document.getElementById('reg-error');
   const suc = document.getElementById('reg-success');
   err.style.display = 'none'; suc.style.display = 'none';
   const body = {
-    name: document.getElementById('reg-name').value,
-    shop_name: document.getElementById('reg-shop').value,
-    email: document.getElementById('reg-email').value,
+    name: document.getElementById('reg-name').value.trim(),
+    shop_name: document.getElementById('reg-shop').value.trim(),
+    email: document.getElementById('reg-email').value.trim(),
     password: document.getElementById('reg-pass').value,
-    phone: document.getElementById('reg-phone').value,
-    city: document.getElementById('reg-city').value,
-    address: document.getElementById('reg-address').value,
+    phone: document.getElementById('reg-phone').value.trim(),
+    city: document.getElementById('reg-city').value.trim(),
+    address: document.getElementById('reg-address').value.trim(),
   };
   try {
     const res = await fetch(`${API}/dealer/register`, {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
     });
     const data = await res.json();
-    if (!res.ok) { err.textContent = data.detail; err.style.display = 'block'; return; }
+    if (!res.ok) { err.textContent = formatDetail(data.detail, 'Registration failed'); err.style.display = 'block'; return; }
     suc.textContent = 'Registered! Redirecting to login...';
     suc.style.display = 'block';
     setTimeout(() => showPage('login'), 1500);
@@ -242,8 +253,8 @@ async function loginUser() {
     const data = await res.json();
     
     if (!res.ok) {
-      console.error(`[LOGIN] Login failed: ${data.detail}`);
-      err.textContent = data.detail || 'Invalid credentials. Please check your email and password.';
+      console.error(`[LOGIN] Login failed: ${JSON.stringify(data.detail)}`);
+      err.textContent = formatDetail(data.detail, 'Invalid credentials. Please check your email and password.');
       err.style.display = 'block';
       return;
     }
@@ -264,7 +275,8 @@ async function loginUser() {
       searchProducts();
     } else {
       showPage('dealerDashboard');
-      document.getElementById('dealer-name').textContent = data.user.name;
+      const dealerEl = document.getElementById('dealer-name');
+      if (dealerEl) dealerEl.textContent = data.user?.name || 'Dealer';
       loadMyProducts();
     }
   } catch(e) {
@@ -301,7 +313,7 @@ async function uploadProduct() {
       method: 'POST', headers: {'Authorization': `Bearer ${getToken()}`}, body: form
     });
     const data = await res.json();
-    if (!res.ok) { err.textContent = data.detail; err.style.display = 'block'; return; }
+    if (!res.ok) { err.textContent = formatDetail(data.detail, 'Upload failed'); err.style.display = 'block'; return; }
     suc.textContent = '✅ Product uploaded successfully!';
     suc.style.display = 'block';
     document.getElementById('p-name').value = '';
@@ -317,13 +329,21 @@ async function loadMyProducts() {
   const container = document.getElementById('my-products');
   if (!container) return;
   container.innerHTML = '<div class="loading">Loading your products...</div>';
-  const res = await fetch(`${API}/products/mine`, { headers: {'Authorization': `Bearer ${getToken()}`} });
-  const products = await res.json();
-  if (!products.length) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>No products yet. Upload your first product above!</p></div>';
-    return;
+  try {
+    const res = await fetch(`${API}/products/mine`, { headers: {'Authorization': `Bearer ${getToken()}`} });
+    if (!res.ok) {
+      container.innerHTML = '<div class="empty-state"><p>Error loading products.</p></div>';
+      return;
+    }
+    const products = await res.json();
+    if (!Array.isArray(products) || !products.length) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>No products yet. Upload your first product above!</p></div>';
+      return;
+    }
+    container.innerHTML = products.map(p => productCard(p, true)).join('');
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state"><p>Connection error. Unable to load products.</p></div>';
   }
-  container.innerHTML = products.map(p => productCard(p, true)).join('');
 }
 
 async function searchProducts() {
@@ -334,19 +354,31 @@ async function searchProducts() {
   container.innerHTML = '<div class="loading">Searching suppliers...</div>';
   let url = `${API}/admin/products?search=${encodeURIComponent(search)}`;
   if (category) url += `&category=${encodeURIComponent(category)}`;
-  const res = await fetch(url, { headers: {'Authorization': `Bearer ${getToken()}`} });
-  const products = await res.json();
-  if (!products.length) {
-    container.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>No products found. Try a different search.</p></div>';
-    return;
+  try {
+    const res = await fetch(url, { headers: {'Authorization': `Bearer ${getToken()}`} });
+    if (!res.ok) {
+      container.innerHTML = '<div class="empty-state"><p>Error searching products.</p></div>';
+      return;
+    }
+    const products = await res.json();
+    if (!Array.isArray(products) || !products.length) {
+      container.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>No products found. Try a different search.</p></div>';
+      return;
+    }
+    container.innerHTML = products.map(p => productCard(p, false)).join('');
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state"><p>Connection error. Unable to search products.</p></div>';
   }
-  container.innerHTML = products.map(p => productCard(p, false)).join('');
 }
 
 async function deleteProduct(id) {
   if (!confirm('Delete this product?')) return;
-  await fetch(`${API}/products/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${getToken()}`} });
-  loadMyProducts();
+  try {
+    const res = await fetch(`${API}/products/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${getToken()}`} });
+    const data = await res.json();
+    if (!res.ok) { alert(formatDetail(data.detail, 'Failed to delete product')); return; }
+    loadMyProducts();
+  } catch(e) { alert('Server error. Try again.'); }
 }
 
 async function adminDeleteProduct(id) {
@@ -357,7 +389,7 @@ async function adminDeleteProduct(id) {
       headers: {'Authorization': `Bearer ${getToken()}`}
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.detail); return; }
+    if (!res.ok) { alert(formatDetail(data.detail, 'Failed to delete product')); return; }
     searchProducts();
   } catch(e) { alert('Server error. Try again.'); }
 }
