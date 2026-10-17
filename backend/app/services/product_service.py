@@ -38,13 +38,31 @@ class ProductService:
         if image and image.filename:
             try:
                 file_bytes = await image.read()
-                file_ext = image.filename.split(".")[-1]
+                file_ext = image.filename.split(".")[-1].lower()
                 file_name = f"{uuid.uuid4()}.{file_ext}"
-                supabase.storage.from_("product-images").upload(file_name, file_bytes)
+                content_type = image.content_type or f"image/{file_ext}"
+
+                try:
+                    supabase.storage.from_("product-images").upload(
+                        file_name,
+                        file_bytes,
+                        {"content-type": content_type}
+                    )
+                except Exception as upload_err:
+                    # If bucket does not exist, auto-create it as public and retry
+                    if "not found" in str(upload_err).lower() or "bucket" in str(upload_err).lower():
+                        supabase.storage.create_bucket("product-images", options={"public": True})
+                        supabase.storage.from_("product-images").upload(
+                            file_name,
+                            file_bytes,
+                            {"content-type": content_type}
+                        )
+                    else:
+                        raise upload_err
+
                 image_url = f"{settings.SUPABASE_URL}/storage/v1/object/public/product-images/{file_name}"
             except Exception as e:
-                # Fallback: if storage fails or bucket not configured, don't crash upload
-                print(f"[STORAGE WARNING] Failed uploading image: {e}")
+                print(f"[STORAGE ERROR] Failed uploading image: {e}")
 
         now_iso = datetime.now(timezone.utc).isoformat()
         insert_data = {
