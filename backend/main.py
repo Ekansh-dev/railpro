@@ -60,9 +60,12 @@ app.include_router(products.router)
 
 @app.get("/", tags=["Health"])
 def root():
+    from urllib.parse import urlparse
+    parsed = urlparse(settings.SUPABASE_URL)
     return {
         "message": "RailSupply API is running!",
         "version": settings.VERSION,
+        "supabase_host": parsed.netloc or "NOT_CONFIGURED",
         "docs_url": "/docs"
     }
 
