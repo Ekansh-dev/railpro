@@ -3,9 +3,11 @@
  * Automatically manages baseURL, Bearer token injection, and JSON serialization.
  */
 
-export const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://127.0.0.1:8000'
-  : 'https://railsupply-backend.onrender.com';
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://127.0.0.1:8000'
+    : 'https://railsupply-backend.onrender.com');
 
 export function getStoredToken() {
   return localStorage.getItem('token');
